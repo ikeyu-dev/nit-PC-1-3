@@ -1,0 +1,12 @@
+venv
+.env
+
+*.avif
+*.csv
+*.keras
+
+# Cache files
+.DS_Store
+__pycache__/
+*.pyc
+*.pyo

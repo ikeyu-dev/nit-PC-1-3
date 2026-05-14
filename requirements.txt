@@ -1,0 +1,11 @@
+fastapi
+mediapipe
+numpy
+opencv_contrib_python
+opencv_python
+pandas
+Requests
+scikit_learn
+tensorflow
+uvicorn
+pygame
