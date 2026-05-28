@@ -21,15 +21,15 @@ export function Hud({ command, vision, elapsedMs, clearTimeMs, isTiming }: HudPr
     <header className="hud">
       <div className="status-strip">
         <div className="status-tile">
-          <span>うごき</span>
+          <span>動き</span>
           <strong>{command.label}</strong>
         </div>
         <div className="status-tile">
-          <span>て</span>
+          <span>手</span>
           <strong>{vision.status === "ready" && vision.confidence > 0 ? vision.handShape : "-"}</strong>
         </div>
         <div className="status-tile">
-          <span>みえた</span>
+          <span>信頼度</span>
           <strong>{probabilities}</strong>
         </div>
         <div className="status-tile">

@@ -68,9 +68,9 @@ def collect_landmarks(label):
 gestures = [
     ("Rock", "グー（止まる）"),
     ("Paper", "パー（すすむ）"),
-    ("Pointing_Left", "人差し指を画面の左へ向ける（ひだり）"),
-    ("Pointing_Right", "人差し指を画面の右へ向ける（みぎ）"),
-    ("Pointing_Down", "人差し指を下へ向ける（バック）"),
+    ("Pointing_Left", "人差し指を画面の左へ向ける（左に曲がる）"),
+    ("Pointing_Right", "人差し指を画面の右へ向ける（右に曲がる）"),
+    ("Pointing_Down", "人差し指を下へ向ける（後ろに下がる）"),
 ]
 
 for label, description in gestures:
