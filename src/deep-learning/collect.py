@@ -1,8 +1,10 @@
 import cv2
 import mediapipe as mp
 import pandas as pd
+from pathlib import Path
 
-csv_file = "landmark_data/hand_landmarks.csv"
+base_dir = Path(__file__).resolve().parent
+csv_file = base_dir / "landmark_data" / "hand_landmarks.csv"
 
 # MediaPipe Hands　セットアップ
 mp_hands = mp.solutions.hands
@@ -63,21 +65,17 @@ def collect_landmarks(label):
     print(f"Collected {len(landmarks_data)} data points for {label}")
 
 
-# 各手の形のデータ収集
+gestures = [
+    ("Rock", "グー（止まる）"),
+    ("Paper", "パー（すすむ）"),
+    ("Pointing_Left", "人差し指を画面の左へ向ける（ひだり）"),
+    ("Pointing_Right", "人差し指を画面の右へ向ける（みぎ）"),
+    ("Pointing_Down", "人差し指を下へ向ける（バック）"),
+]
 
-# グー（指示：「止まれ」）
-input("Rock")
-collect_landmarks("rock")
-
-# パー（指示：「直進」）
-input("Paper")
-collect_landmarks("paper")
-
-# 人差し指のみ（ランドーマーク5, 6, 7, 8番）（指示：「後退」）
-input("Pointing_UP (landmark: 5, 6, 7, 8)")
-collect_landmarks("pointing_up")
-
-# TODO:右折，左折の実装
+for label, description in gestures:
+    input(f"{description}: Enterで収集開始、qで次へ")
+    collect_landmarks(label)
 
 
 # CSVファイルに保存
@@ -89,6 +87,7 @@ try:
         + ["label"]
     )
     df = pd.DataFrame(landmarks_data, columns=columns)
+    csv_file.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(csv_file, index=False)
     print(f"successfully: {csv_file}")
 except Exception as e:

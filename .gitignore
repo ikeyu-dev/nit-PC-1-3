@@ -1,5 +1,11 @@
 venv
+.venv
+node_modules
+dist
+*.tsbuildinfo
 .env
+.mplconfig
+.fontconfig-cache
 
 *.avif
 *.csv
