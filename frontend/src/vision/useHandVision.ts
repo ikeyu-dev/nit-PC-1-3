@@ -234,7 +234,7 @@ export function useHandVision() {
                 Pointing_Down: 0,
               },
               frame: frameCountRef.current,
-              message: "手を画面のまんなかに見せてね",
+              message: "手を画面の中央に見せてください",
             }));
           }
         } catch (error) {
