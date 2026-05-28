@@ -1,11 +1,10 @@
-fastapi
-mediapipe
+mediapipe==0.10.21
+jax==0.4.28
+jaxlib==0.4.28
 numpy
-opencv_contrib_python
-opencv_python
+opencv_contrib_python==4.11.0.86
+opencv_python==4.11.0.86
 pandas
-Requests
 scikit_learn
-tensorflow
-uvicorn
+tensorflow==2.16.2
 pygame

@@ -2,8 +2,9 @@ import cv2
 import mediapipe as mp
 import numpy as np
 from tensorflow.keras.models import load_model
-import requests
 import time
+import json
+import os
 
 # Mediapipe Handsのセットアップ
 mp_hands = mp.solutions.hands
@@ -12,10 +13,14 @@ hands = mp_hands.Hands(
 )
 mp_drawing = mp.solutions.drawing_utils
 
-# モデルの読み込み
-import os
 model_path = os.path.join(os.path.dirname(__file__), "model/hand_model.keras")
+labels_path = os.path.join(os.path.dirname(__file__), "model/labels.json")
 model = load_model(model_path)
+if os.path.exists(labels_path):
+    with open(labels_path, encoding="utf-8") as f:
+        labels = json.load(f)
+else:
+    labels = ["Paper", "Pointing_UP", "Rock"]
 
 
 # 手のランドマークを抽出する関数
@@ -35,13 +40,7 @@ def predict_hand_shape(landmarks):
     prediction = model.predict(landmarks)
     predicted_class = np.argmax(prediction)
 
-    # ラベルを返す
-    if predicted_class == 0:
-        return "Paper"
-    elif predicted_class == 1:
-        return "Pointing_UP"
-    else:
-        return "Rock"
+    return labels[predicted_class]
 
 
 # カメラのセットアップ
@@ -87,18 +86,6 @@ while cap.isOpened():
 
             # ランドマークを描画
             mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-
-            # サーバーに結果を送信
-            try:
-                response = requests.get(
-                    f"http://localhost:7001/realtime/judge?hand_shape={hand_shape}",
-                )
-                if response.status_code == 200:
-                    print("Result sent to server successfully.")
-                else:
-                    print(f"Failed: {response.status_code}, {response.content}")
-            except Exception as e:
-                print(f"Error sending result to server: {e}")
 
     # 別ウィンドウで描画
     cv2.imshow("Hand Detection", frame)

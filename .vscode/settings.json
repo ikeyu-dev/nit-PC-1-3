@@ -1,0 +1,7 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "code-runner.executorMap": {
+    "python": "cd ${workspaceFolder} && MPLCONFIGDIR=${workspaceFolder}/.mplconfig XDG_CACHE_HOME=${workspaceFolder}/.fontconfig-cache ${workspaceFolder}/.venv/bin/python -u $fullFileName"
+  },
+  "code-runner.runInTerminal": true
+}
