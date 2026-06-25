@@ -177,10 +177,6 @@ export function useBodyVision() {
                 throw new Error("Camera requires HTTPS or localhost.");
             }
 
-            if (!navigator.mediaDevices?.getUserMedia) {
-                throw new Error("Camera API is not available in this browser.");
-            }
-
             setVision((current) => ({
                 ...current,
                 message: "全身モデルを読み込み中",
@@ -227,18 +223,16 @@ export function useBodyVision() {
             await waitForVideoSize(videoRef.current);
             isRunningRef.current = true;
 
-            const scheduleNext = (detect: () => void) => {
-                // requestVideoFrameCallbackで映像更新に合わせて推定し、未対応ならsetTimeoutで代用する。
+            const scheduleNext = (detect: () => Promise<void>) => {
+                // setTimeoutで次の推定を予約し、Promiseはvoidで明示して未処理にしない。
                 const video = videoRef.current;
                 if (!video) {
                     return;
                 }
 
-                if (video.requestVideoFrameCallback) {
-                    videoFrameCallbackRef.current = video.requestVideoFrameCallback(() => detect());
-                } else {
-                    timerRef.current = window.setTimeout(detect, 90);
-                }
+                timerRef.current = window.setTimeout(() => {
+                    void detect();
+                }, 90);
             };
 
             const detect = async () => {
@@ -265,7 +259,7 @@ export function useBodyVision() {
 
                     frameCountRef.current += 1;
                     const pose = poses[0];
-                    if (pose?.keypoints?.length) {
+                    if (pose.keypoints.length > 0) {
                         const keypoints = pose.keypoints as PoseKeypoint[];
                         // 骨格点をゲーム操作へ変換し、React側へ渡す。
                         const action = classifyBodyAction(keypoints, previousAnkleYRef.current);
@@ -280,7 +274,7 @@ export function useBodyVision() {
                         setVision({
                             status: "ready",
                             action,
-                            confidence: pose.score ?? 0,
+                            confidence: typeof pose.score === "number" ? pose.score : 0,
                             frame: frameCountRef.current,
                             message: "体の動きを見ています",
                         });

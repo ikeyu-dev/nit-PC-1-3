@@ -9,54 +9,40 @@ import type { BodyAction, ViolationEvent } from "./types";
 import { useBodyVision } from "./vision/useBodyVision";
 
 function formatTime(ms: number) {
-  return `${(ms / 1000).toFixed(2)}s`;
+    return `${(ms / 1000).toFixed(2)}s`;
 }
 
 export function App() {
-  // useBodyVisionでカメラ映像から体の動きを読み取り、ゲーム操作に使う。
-  const { videoRef, vision, start } = useBodyVision();
-  // bodyActionで現在の体の動きを保存し、Three.js側へ渡す操作へ変換する。
-  const [bodyAction, setBodyAction] = useState<BodyAction>("idle");
-  // moneyで所持金を管理し、違反時に反則金ぶん減らす。
-  const [money, setMoney] = useState(INITIAL_MONEY);
+    // useBodyVisionでカメラ映像から体の動きを読み取り、ゲーム操作に使う。
+    const { videoRef, vision, start } = useBodyVision();
+    // moneyで所持金を管理し、違反時に反則金ぶん減らす。
+    const [money, setMoney] = useState(INITIAL_MONEY);
   // lastViolationで直近の違反を保持し、青切符カードを表示する。
   const [lastViolation, setLastViolation] = useState<ViolationEvent | null>(null);
   const timerStartRef = useRef<number | null>(null);
   const violationTimerRef = useRef<number | null>(null);
-  const [isTiming, setIsTiming] = useState(false);
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [clearTimeMs, setClearTimeMs] = useState<number | null>(null);
-  const command = useMemo(() => commandByBodyAction[bodyAction], [bodyAction]);
+    const [isTiming, setIsTiming] = useState(false);
+    const [elapsedMs, setElapsedMs] = useState(0);
+    const [clearTimeMs, setClearTimeMs] = useState<number | null>(null);
+    const bodyAction = useMemo<BodyAction>(() => {
+        // ゴール画面中や認識が不安定な時は、カメラ入力で再発進しないよう止まる操作にする。
+        if (clearTimeMs !== null || vision.status !== "ready" || vision.confidence <= 0) {
+            return "idle";
+        }
 
-  useEffect(() => {
-    // 画面表示後にカメラと姿勢推定モデルを起動する。
-    void start();
-  }, [start]);
+        // 信頼度が低い動きは採用しないことで、誤判定による急な発進を防ぐ。
+        if (vision.action !== "idle" && vision.confidence < 0.25) {
+            return "idle";
+        }
 
-  useEffect(() => {
-    // ゴール画面を表示している間は、カメラ入力で車が再スタートしないようにする。
-    if (clearTimeMs !== null) {
-      return;
-    }
+        return vision.action;
+    }, [clearTimeMs, vision.action, vision.confidence, vision.status]);
+    const command = useMemo(() => commandByBodyAction[bodyAction], [bodyAction]);
 
-    if (vision.status !== "ready") {
-      return;
-    }
-
-    if (vision.confidence <= 0) {
-      // 体が見えなくなったら、直前の操作を残さず安全側の停止へ戻す。
-      setBodyAction("idle");
-      return;
-    }
-
-    // 信頼度が低い動きは採用しないことで、誤判定による急な発進を防ぐ。
-    if (vision.action !== "idle" && vision.confidence < 0.25) {
-      return;
-    }
-
-    // 認識された体の動きをReactの状態へ反映し、次フレームの操作に使う。
-    setBodyAction(vision.action);
-  }, [clearTimeMs, vision.action, vision.confidence, vision.status]);
+    useEffect(() => {
+        // 画面表示後にカメラと姿勢推定モデルを起動する。
+        void start();
+    }, [start]);
 
   useEffect(() => {
     if (!isTiming) {
@@ -92,22 +78,20 @@ export function App() {
     // ゴールに入った瞬間の経過時間を固定して、ゴール画面に表示する。
     const clearTime = performance.now() - timerStartRef.current;
     timerStartRef.current = null;
-    setElapsedMs(clearTime);
-    setClearTimeMs(clearTime);
-    setIsTiming(false);
-    setBodyAction("idle");
-  }, []);
+        setElapsedMs(clearTime);
+        setClearTimeMs(clearTime);
+        setIsTiming(false);
+    }, []);
 
-  const handleRestart = useCallback(() => {
+    const handleRestart = useCallback(() => {
     // もう一回ボタンでタイマー・所持金・違反カードを初期状態へ戻す。
     timerStartRef.current = null;
-    setElapsedMs(0);
-    setClearTimeMs(null);
-    setIsTiming(false);
-    setBodyAction("idle");
-    setMoney(INITIAL_MONEY);
-    setLastViolation(null);
-  }, []);
+        setElapsedMs(0);
+        setClearTimeMs(null);
+        setIsTiming(false);
+        setMoney(INITIAL_MONEY);
+        setLastViolation(null);
+    }, []);
 
   const handleViolation = useCallback((violation: ViolationEvent) => {
     // 違反イベントを受け取った時に、反則金を所持金から引いてカードを表示する。

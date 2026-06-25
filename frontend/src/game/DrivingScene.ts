@@ -571,7 +571,7 @@ export class DrivingScene {
         this.appliedViolations.add(type);
         this.onViolation({
             ...violationRules[type],
-            id: `${type}-${this.goalCount}-${Math.round(this.clock.elapsedTime * 1000)}`,
+            id: `${type}-${String(this.goalCount)}-${String(Math.round(this.clock.elapsedTime * 1000))}`,
         });
     }
 
