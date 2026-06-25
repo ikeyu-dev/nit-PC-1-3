@@ -2,22 +2,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CameraPanel } from "./components/CameraPanel";
 import { GameCanvas } from "./components/GameCanvas";
 import { Hud } from "./components/Hud";
-import { commandByHandShape } from "./game/commands";
-import type { HandShape } from "./types";
-import { useHandVision } from "./vision/useHandVision";
+import { ViolationCard } from "./components/ViolationCard";
+import { commandByBodyAction } from "./game/commands";
+import { INITIAL_MONEY } from "./game/trafficRules";
+import type { BodyAction, ViolationEvent } from "./types";
+import { useBodyVision } from "./vision/useBodyVision";
 
 function formatTime(ms: number) {
   return `${(ms / 1000).toFixed(2)}s`;
 }
 
 export function App() {
-  const { videoRef, vision, start } = useHandVision();
-  const [driveShape, setDriveShape] = useState<HandShape>("Rock");
+  const { videoRef, vision, start } = useBodyVision();
+  const [bodyAction, setBodyAction] = useState<BodyAction>("idle");
+  const [money, setMoney] = useState(INITIAL_MONEY);
+  const [lastViolation, setLastViolation] = useState<ViolationEvent | null>(null);
   const timerStartRef = useRef<number | null>(null);
+  const violationTimerRef = useRef<number | null>(null);
   const [isTiming, setIsTiming] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [clearTimeMs, setClearTimeMs] = useState<number | null>(null);
-  const command = useMemo(() => commandByHandShape[driveShape], [driveShape]);
+  const command = useMemo(() => commandByBodyAction[bodyAction], [bodyAction]);
 
   useEffect(() => {
     void start();
@@ -34,18 +39,17 @@ export function App() {
     }
 
     if (vision.confidence <= 0) {
-      // 手が見えなくなったら、直前の操作を残さず安全側の停止へ戻す。
-      setDriveShape("Rock");
+      // 体が見えなくなったら、直前の操作を残さず安全側の停止へ戻す。
+      setBodyAction("idle");
       return;
     }
 
-    // グーは誤検出で停止しやすいので、少し高めの信頼度だけ採用する。
-    if (vision.handShape === "Rock" && vision.confidence < 0.86) {
+    if (vision.action !== "idle" && vision.confidence < 0.25) {
       return;
     }
 
-    setDriveShape(vision.handShape);
-  }, [clearTimeMs, vision.handShape, vision.confidence, vision.status]);
+    setBodyAction(vision.action);
+  }, [clearTimeMs, vision.action, vision.confidence, vision.status]);
 
   useEffect(() => {
     if (!isTiming) {
@@ -84,7 +88,7 @@ export function App() {
     setElapsedMs(clearTime);
     setClearTimeMs(clearTime);
     setIsTiming(false);
-    setDriveShape("Rock");
+    setBodyAction("idle");
   }, []);
 
   const handleRestart = useCallback(() => {
@@ -92,14 +96,45 @@ export function App() {
     setElapsedMs(0);
     setClearTimeMs(null);
     setIsTiming(false);
-    setDriveShape("Rock");
+    setBodyAction("idle");
+    setMoney(INITIAL_MONEY);
+    setLastViolation(null);
+  }, []);
+
+  const handleViolation = useCallback((violation: ViolationEvent) => {
+    setMoney((current) => Math.max(0, current - violation.fine));
+    setLastViolation(violation);
+
+    if (violationTimerRef.current !== null) {
+      window.clearTimeout(violationTimerRef.current);
+    }
+    violationTimerRef.current = window.setTimeout(() => {
+      setLastViolation(null);
+      violationTimerRef.current = null;
+    }, 5200);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (violationTimerRef.current !== null) {
+        window.clearTimeout(violationTimerRef.current);
+      }
+    };
   }, []);
 
   return (
     <main className="app-shell">
-      <GameCanvas command={command} onDriveStart={handleDriveStart} onLap={handleLap} />
+      <GameCanvas command={command} onDriveStart={handleDriveStart} onLap={handleLap} onViolation={handleViolation} />
       <div className="ui-layer">
-        <Hud command={command} vision={vision} elapsedMs={elapsedMs} clearTimeMs={clearTimeMs} isTiming={isTiming} />
+        <Hud
+          command={command}
+          vision={vision}
+          money={money}
+          elapsedMs={elapsedMs}
+          clearTimeMs={clearTimeMs}
+          isTiming={isTiming}
+        />
+        <ViolationCard violation={lastViolation} money={money} />
         <div className="bottom-panel">
           <CameraPanel videoRef={videoRef} vision={vision} />
         </div>

@@ -1,14 +1,14 @@
 import type { RefObject } from "react";
-import type { VisionState } from "../types";
+import type { BodyVisionState } from "../types";
 
 type CameraPanelProps = {
   videoRef: RefObject<HTMLVideoElement>;
-  vision: VisionState;
+  vision: BodyVisionState;
 };
 
 export function CameraPanel({ videoRef, vision }: CameraPanelProps) {
   return (
-    <section className="camera-panel" aria-label="Hand camera controls">
+    <section className="camera-panel" aria-label="Body camera controls">
       <div className="video-frame">
         <video ref={videoRef} muted playsInline />
         <div className="video-glow" />

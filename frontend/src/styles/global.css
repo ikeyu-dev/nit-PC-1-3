@@ -137,6 +137,67 @@ button {
   gap: 18px;
 }
 
+.violation-card {
+  pointer-events: auto;
+  align-self: flex-end;
+  width: min(360px, 100%);
+  overflow: hidden;
+  border: 3px solid #1d2f7a;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 20px 56px rgba(23, 50, 77, 0.22);
+}
+
+.violation-card__header {
+  padding: 8px 14px;
+  background: #1591d1;
+  color: #ffffff;
+  font-size: 1.3rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.violation-card__body {
+  padding: 14px;
+}
+
+.violation-card__label,
+.violation-card__fine,
+.violation-card__money,
+.violation-card__hint {
+  margin: 0;
+}
+
+.violation-card__label {
+  color: #e3192d;
+  font-size: 1.35rem;
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.violation-card__fine {
+  margin-top: 8px;
+  color: #111827;
+  font-size: 2.1rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.violation-card__money {
+  margin-top: 8px;
+  color: #17324d;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.violation-card__hint {
+  margin-top: 10px;
+  color: #3b5870;
+  font-size: 0.92rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .camera-panel {
   display: grid;
   grid-template-columns: 150px minmax(180px, 260px);
@@ -278,6 +339,10 @@ button {
   .bottom-panel {
     display: grid;
     gap: 10px;
+  }
+
+  .violation-card {
+    width: 100%;
   }
 
   .camera-panel {

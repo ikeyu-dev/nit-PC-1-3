@@ -1,14 +1,15 @@
 import { useEffect, useRef } from "react";
 import { DrivingScene } from "../game/DrivingScene";
-import type { DriveCommand } from "../types";
+import type { DriveCommand, ViolationEvent } from "../types";
 
 type GameCanvasProps = {
   command: DriveCommand;
   onDriveStart: () => void;
   onLap: (lap: number) => void;
+  onViolation: (violation: ViolationEvent) => void;
 };
 
-export function GameCanvas({ command, onDriveStart, onLap }: GameCanvasProps) {
+export function GameCanvas({ command, onDriveStart, onLap, onViolation }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const sceneRef = useRef<DrivingScene | null>(null);
 
@@ -21,6 +22,7 @@ export function GameCanvas({ command, onDriveStart, onLap }: GameCanvasProps) {
       canvas: canvasRef.current,
       onDriveStart,
       onLap,
+      onViolation,
     });
     sceneRef.current = scene;
     scene.start();
@@ -33,7 +35,7 @@ export function GameCanvas({ command, onDriveStart, onLap }: GameCanvasProps) {
       scene.dispose();
       sceneRef.current = null;
     };
-  }, [onDriveStart, onLap]);
+  }, [onDriveStart, onLap, onViolation]);
 
   useEffect(() => {
     sceneRef.current?.setCommand(command);

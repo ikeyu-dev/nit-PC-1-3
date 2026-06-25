@@ -1,10 +1,14 @@
 import * as THREE from "three";
-import type { DriveCommand } from "../types";
+import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import type { DriveCommand, ViolationEvent, ViolationType } from "../types";
+import { violationRules } from "./trafficRules";
 
 type DrivingSceneOptions = {
     canvas: HTMLCanvasElement;
     onDriveStart: () => void;
     onLap: (lap: number) => void;
+    onViolation: (violation: ViolationEvent) => void;
 };
 
 type Rect = {
@@ -48,6 +52,10 @@ const hedgeRects: Rect[] = [
 
 const startPosition = new THREE.Vector3(-24, 0, 14);
 const goalRect: Rect = { x: 32, z: -22, width: 6, depth: 6 };
+const signalZone: Rect = { x: -4, z: 14, width: 5, depth: 7 };
+const stopApproachZone: Rect = { x: 6.4, z: 14, width: 4.8, depth: 7 };
+const stopPassZone: Rect = { x: 9.8, z: 14, width: 1.1, depth: 7 };
+const nightZone: Rect = { x: 23, z: -22, width: 9, depth: 7 };
 
 // 植え込みとの当たり判定に足す余白。車幅のおよそ半分。
 const carCollisionPadding = 0.62;
@@ -107,23 +115,30 @@ export class DrivingScene {
     private readonly car = new THREE.Group();
     private readonly onDriveStart: () => void;
     private readonly onLap: (lap: number) => void;
+    private readonly onViolation: (violation: ViolationEvent) => void;
     private frame = 0;
     private heading = 0;
     private speed = 0;
     private goalCount = 0;
     private hasStartedRun = false;
     private reachedGoal = false;
+    private stopLineSatisfied = false;
+    private redSignal = true;
+    private readonly appliedViolations = new Set<string>();
+    private readonly trafficLightBulbs: THREE.Mesh[] = [];
+    private readonly frontLight = new THREE.PointLight("#fff7bf", 0, 8, 1.6);
     private position = startPosition.clone();
     private command: DriveCommand = {
-        handShape: "Rock",
+        action: "idle",
         label: "止まる",
         speedTarget: 0,
         turnTarget: 0,
     };
 
-    constructor({ canvas, onDriveStart, onLap }: DrivingSceneOptions) {
+    constructor({ canvas, onDriveStart, onLap, onViolation }: DrivingSceneOptions) {
         this.onDriveStart = onDriveStart;
         this.onLap = onLap;
+        this.onViolation = onViolation;
         this.renderer = new THREE.WebGLRenderer({
             canvas,
             antialias: true,
@@ -137,7 +152,7 @@ export class DrivingScene {
 
         this.buildLights();
         this.buildWorld();
-        this.buildCar();
+        this.buildBicycle();
         this.resize();
     }
 
@@ -204,6 +219,7 @@ export class DrivingScene {
         );
 
         this.addRoadMarks();
+        this.addRuleMarkers();
         this.addMazeHedges();
         this.addGoal();
         this.addTrees();
@@ -257,6 +273,64 @@ export class DrivingScene {
             hedge.castShadow = true;
             hedge.receiveShadow = true;
             this.scene.add(hedge);
+        });
+    }
+
+    private addRuleMarkers() {
+        const stopLine = new THREE.Mesh(
+            new THREE.BoxGeometry(0.35, 0.06, 6.6),
+            new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 0.42 }),
+        );
+        stopLine.position.set(8.2, 0.14, 14);
+        stopLine.castShadow = false;
+        this.scene.add(stopLine);
+
+        const stopSign = new THREE.Mesh(
+            new THREE.ConeGeometry(0.9, 0.12, 3),
+            new THREE.MeshStandardMaterial({ color: "#ff2d3f", roughness: 0.38 }),
+        );
+        stopSign.position.set(8.2, 1.75, 9.7);
+        stopSign.rotation.set(Math.PI / 2, 0, Math.PI / 6);
+        stopSign.castShadow = true;
+        this.scene.add(stopSign);
+
+        const pole = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.08, 0.08, 2.6, 12),
+            new THREE.MeshStandardMaterial({ color: "#d8dee7", roughness: 0.46 }),
+        );
+        pole.position.set(-4, 1.3, 9.7);
+        pole.castShadow = true;
+        this.scene.add(pole);
+
+        const signalBody = new THREE.Mesh(
+            new THREE.BoxGeometry(1.5, 0.55, 0.32),
+            new THREE.MeshStandardMaterial({ color: "#344253", roughness: 0.5 }),
+        );
+        signalBody.position.set(-4, 2.6, 9.55);
+        signalBody.castShadow = true;
+        this.scene.add(signalBody);
+
+        [0xff4d4d, 0xffd166, 0x4ccf64].forEach((color, index) => {
+            const bulb = new THREE.Mesh(
+                new THREE.SphereGeometry(0.16, 20, 12),
+                new THREE.MeshStandardMaterial({
+                    color,
+                    emissive: color,
+                    emissiveIntensity: index === 0 ? 1.4 : 0.08,
+                    roughness: 0.32,
+                }),
+            );
+            bulb.position.set(-4.45 + index * 0.45, 2.62, 9.36);
+            this.trafficLightBulbs.push(bulb);
+            this.scene.add(bulb);
+        });
+
+        const nightPad = addBox(this.scene, nightZone, 0.1, 0.16, 0x283c5c, 0.72);
+        nightPad.material = new THREE.MeshStandardMaterial({
+            color: "#283c5c",
+            roughness: 0.7,
+            emissive: "#0b1530",
+            emissiveIntensity: 0.2,
         });
     }
 
@@ -356,60 +430,149 @@ export class DrivingScene {
     //   });
     // }
 
-    private buildCar() {
-        // 車は複数の簡単な立体を組み合わせたGroupとして作る。
-        const body = roundedBox(1.55, 0.58, 2.35, 0xff465d);
-        body.position.y = 0.58;
-        body.castShadow = true;
-        this.car.add(body);
+    private buildBicycle() {
+        // 読み込み中や失敗時にも操作できるように、先に簡易自転車を置いてからOBJで差し替える。
+        this.addFallbackBicycle();
+        this.car.position.copy(this.position);
+        this.scene.add(this.car);
+        void this.loadBicycleModel();
+    }
 
-        const cabin = roundedBox(1.08, 0.56, 1.0, 0x9be7ff);
-        cabin.position.set(0, 1.02, -0.16);
-        cabin.scale.set(1, 0.92, 1);
-        cabin.castShadow = true;
-        this.car.add(cabin);
-
-        const bumper = roundedBox(1.36, 0.18, 0.22, 0xffd166);
-        bumper.position.set(0, 0.5, 1.28);
-        bumper.castShadow = true;
-        this.car.add(bumper);
-
+    private addFallbackBicycle() {
+        this.car.clear();
         const wheelMaterial = new THREE.MeshStandardMaterial({
             color: "#202938",
             roughness: 0.52,
         });
-        const hubMaterial = new THREE.MeshStandardMaterial({
-            color: "#f5f7fa",
-            roughness: 0.34,
-            metalness: 0.16,
-        });
-        [-0.86, 0.86].forEach((x) => {
-            [-0.72, 0.82].forEach((z) => {
-                const wheel = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.28, 0.28, 0.22, 24),
-                    wheelMaterial,
-                );
-                wheel.rotation.z = Math.PI / 2;
-                wheel.position.set(x, 0.34, z);
-                wheel.castShadow = true;
-                const hub = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.14, 0.14, 0.235, 20),
-                    hubMaterial,
-                );
-                hub.rotation.z = Math.PI / 2;
-                wheel.add(hub);
-                this.car.add(wheel);
-            });
+
+        [-0.78, 0.78].forEach((z) => {
+            const wheel = new THREE.Mesh(
+                new THREE.TorusGeometry(0.42, 0.045, 12, 32),
+                wheelMaterial,
+            );
+            wheel.rotation.y = Math.PI / 2;
+            wheel.position.set(0, 0.45, z);
+            wheel.castShadow = true;
+            this.car.add(wheel);
         });
 
-        this.car.position.copy(this.position);
-        this.scene.add(this.car);
+        const frame = roundedBox(0.12, 0.12, 1.55, 0x35b7c8);
+        frame.position.set(0, 0.78, 0);
+        frame.castShadow = true;
+        this.car.add(frame);
+
+        const handle = roundedBox(0.8, 0.08, 0.08, 0x17324d);
+        handle.position.set(0, 1.12, 0.82);
+        handle.castShadow = true;
+        this.car.add(handle);
+
+        const seat = roundedBox(0.56, 0.08, 0.32, 0x17324d);
+        seat.position.set(0, 1.06, -0.25);
+        seat.castShadow = true;
+        this.car.add(seat);
+
+        this.frontLight.position.set(0, 0.85, 1.2);
+        this.car.add(this.frontLight);
+    }
+
+    private async loadBicycleModel() {
+        try {
+            const modelPath = "/models/bicycle/";
+            const materials = await new MTLLoader().setPath(modelPath).loadAsync("11717_bicycle_v2_L1.mtl");
+            materials.preload();
+
+            const object = await new OBJLoader()
+                .setMaterials(materials)
+                .setPath(modelPath)
+                .loadAsync("11717_bicycle_v2_L1.obj");
+
+            object.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+
+            // このOBJはZ軸が高さ方向なので、Three.jsのY軸へ起こしてから地面に載せる。
+            object.rotation.x = -Math.PI / 2;
+            object.rotation.z = -Math.PI / 2;
+            object.updateMatrixWorld(true);
+
+            const rotatedBox = new THREE.Box3().setFromObject(object);
+            const rotatedSize = rotatedBox.getSize(new THREE.Vector3());
+            const largestSide = Math.max(rotatedSize.x, rotatedSize.y, rotatedSize.z);
+            object.scale.setScalar(2.15 / largestSide);
+            object.updateMatrixWorld(true);
+
+            const scaledBox = new THREE.Box3().setFromObject(object);
+            const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
+            object.position.sub(scaledCenter);
+            object.updateMatrixWorld(true);
+
+            const groundedBox = new THREE.Box3().setFromObject(object);
+            object.position.y -= groundedBox.min.y;
+
+            this.car.clear();
+            this.car.add(object);
+
+            this.frontLight.position.set(0, 0.75, 1.15);
+            this.car.add(this.frontLight);
+        } catch (error) {
+            console.error("Bicycle model failed to load", error);
+        }
+    }
+
+    private updateTrafficLight() {
+        this.redSignal = Math.floor(this.clock.elapsedTime / 4) % 2 === 0;
+        this.trafficLightBulbs.forEach((bulb, index) => {
+            const material = bulb.material;
+            if (!(material instanceof THREE.MeshStandardMaterial)) {
+                return;
+            }
+            const isActive = this.redSignal ? index === 0 : index === 2;
+            material.emissiveIntensity = isActive ? 1.45 : 0.08;
+        });
+    }
+
+    private reportViolation(type: ViolationType) {
+        if (this.appliedViolations.has(type)) {
+            return;
+        }
+
+        this.appliedViolations.add(type);
+        this.onViolation({
+            ...violationRules[type],
+            id: `${type}-${this.goalCount}-${Math.round(this.clock.elapsedTime * 1000)}`,
+        });
+    }
+
+    private updateRuleChecks() {
+        this.updateTrafficLight();
+
+        if (inRect(this.position, stopApproachZone) && Math.abs(this.speed) < 0.18) {
+            this.stopLineSatisfied = true;
+        }
+
+        if (inRect(this.position, stopPassZone) && !this.stopLineSatisfied && Math.abs(this.speed) > 0.3) {
+            this.reportViolation("stopSign");
+        }
+
+        if (inRect(this.position, signalZone) && this.redSignal && Math.abs(this.speed) > 0.3) {
+            this.reportViolation("redLight");
+        }
+
+        const inNight = inRect(this.position, nightZone, 0.2);
+        const lightIsOn = inNight && this.command.action === "lightOn";
+        this.frontLight.intensity = lightIsOn ? 2.6 : 0;
+        if (inNight && !lightIsOn && Math.abs(this.speed) > 0.3) {
+            this.reportViolation("noLight");
+        }
     }
 
     private update() {
         const dt = Math.min(this.clock.getDelta(), 0.04);
 
-        // speedTarget/turnTargetは手の形から決まる目標値。急に変わりすぎないよう少しずつ近づける。
+        // speedTarget/turnTargetは体の動きから決まる目標値。急に変わりすぎないよう少しずつ近づける。
         const targetSpeed = this.command.speedTarget * 8.8;
         this.speed += (targetSpeed - this.speed) * Math.min(1, dt * 3.2);
         this.heading +=
@@ -427,6 +590,8 @@ export class DrivingScene {
             this.hasStartedRun = true;
             this.onDriveStart();
         }
+
+        this.updateRuleChecks();
 
         const onRoad = roadRects.some((rect) =>
             inRect(this.position, rect, 0.6),
@@ -451,6 +616,8 @@ export class DrivingScene {
                 this.heading = 0;
                 this.hasStartedRun = false;
                 this.reachedGoal = false;
+                this.stopLineSatisfied = false;
+                this.appliedViolations.clear();
             }, 900);
         }
 
