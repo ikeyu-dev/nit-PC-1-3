@@ -1,5 +1,3 @@
-export type HandShape = "Rock" | "Paper" | "Pointing_Left" | "Pointing_Right" | "Pointing_Down";
-
 // DriveCommandで3Dシーンへ渡す操作内容をまとめ、速度と旋回を制御する。
 export type DriveCommand = {
   action: BodyAction;
@@ -20,15 +18,6 @@ export type BodyAction =
   | "lookLeft"
   | "lookRight"
   | "lightOn";
-
-export type VisionState = {
-  status: VisionStatus;
-  handShape: HandShape;
-  confidence: number;
-  message: string;
-  probabilities?: Partial<Record<HandShape, number>>;
-  frame?: number;
-};
 
 // BodyVisionStateで全身姿勢推定の状態をUIと操作変換で共有する。
 export type BodyVisionState = {

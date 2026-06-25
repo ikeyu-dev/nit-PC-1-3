@@ -1,38 +1,4 @@
-import type { BodyAction, DriveCommand, HandShape } from "../types";
-
-// 旧手形入力との互換を残すため、手形を体アクション相当の操作へ変換する。
-export const commandByHandShape: Record<HandShape, DriveCommand> = {
-    Paper: {
-        action: "pedal",
-        label: "すすむ",
-        speedTarget: 0.5,
-        turnTarget: 0,
-    },
-    Rock: {
-        action: "idle",
-        label: "止まる",
-        speedTarget: 0,
-        turnTarget: 0,
-    },
-    Pointing_Left: {
-        action: "signalLeft",
-        label: "左に曲がる",
-        speedTarget: 0.72,
-        turnTarget: -1,
-    },
-    Pointing_Right: {
-        action: "signalRight",
-        label: "右に曲がる",
-        speedTarget: 0.72,
-        turnTarget: 1,
-    },
-    Pointing_Down: {
-        action: "brake",
-        label: "後ろに下がる",
-        speedTarget: -0.68,
-        turnTarget: 0,
-    },
-};
+import type { BodyAction, DriveCommand } from "../types";
 
 // commandByBodyActionで姿勢推定結果を速度・旋回量に変換し、3D自転車を動かす。
 export const commandByBodyAction: Record<BodyAction, DriveCommand> = {
