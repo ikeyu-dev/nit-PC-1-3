@@ -13,9 +13,13 @@ function formatTime(ms: number) {
 }
 
 export function App() {
+  // useBodyVisionでカメラ映像から体の動きを読み取り、ゲーム操作に使う。
   const { videoRef, vision, start } = useBodyVision();
+  // bodyActionで現在の体の動きを保存し、Three.js側へ渡す操作へ変換する。
   const [bodyAction, setBodyAction] = useState<BodyAction>("idle");
+  // moneyで所持金を管理し、違反時に反則金ぶん減らす。
   const [money, setMoney] = useState(INITIAL_MONEY);
+  // lastViolationで直近の違反を保持し、青切符カードを表示する。
   const [lastViolation, setLastViolation] = useState<ViolationEvent | null>(null);
   const timerStartRef = useRef<number | null>(null);
   const violationTimerRef = useRef<number | null>(null);
@@ -25,6 +29,7 @@ export function App() {
   const command = useMemo(() => commandByBodyAction[bodyAction], [bodyAction]);
 
   useEffect(() => {
+    // 画面表示後にカメラと姿勢推定モデルを起動する。
     void start();
   }, [start]);
 
@@ -44,10 +49,12 @@ export function App() {
       return;
     }
 
+    // 信頼度が低い動きは採用しないことで、誤判定による急な発進を防ぐ。
     if (vision.action !== "idle" && vision.confidence < 0.25) {
       return;
     }
 
+    // 認識された体の動きをReactの状態へ反映し、次フレームの操作に使う。
     setBodyAction(vision.action);
   }, [clearTimeMs, vision.action, vision.confidence, vision.status]);
 
@@ -92,6 +99,7 @@ export function App() {
   }, []);
 
   const handleRestart = useCallback(() => {
+    // もう一回ボタンでタイマー・所持金・違反カードを初期状態へ戻す。
     timerStartRef.current = null;
     setElapsedMs(0);
     setClearTimeMs(null);
@@ -102,9 +110,11 @@ export function App() {
   }, []);
 
   const handleViolation = useCallback((violation: ViolationEvent) => {
+    // 違反イベントを受け取った時に、反則金を所持金から引いてカードを表示する。
     setMoney((current) => Math.max(0, current - violation.fine));
     setLastViolation(violation);
 
+    // 新しい違反カードが出た時に古い非表示タイマーを消して、表示時間を延ばす。
     if (violationTimerRef.current !== null) {
       window.clearTimeout(violationTimerRef.current);
     }
@@ -115,6 +125,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    // 画面を閉じる時にカード非表示タイマーを片付けるため。
     return () => {
       if (violationTimerRef.current !== null) {
         window.clearTimeout(violationTimerRef.current);

@@ -18,6 +18,7 @@ export function GameCanvas({ command, onDriveStart, onLap, onViolation }: GameCa
       return;
     }
 
+    // canvas要素からThree.jsのDrivingSceneを作り、3D道路と自転車を描画する。
     const scene = new DrivingScene({
       canvas: canvasRef.current,
       onDriveStart,
@@ -27,10 +28,12 @@ export function GameCanvas({ command, onDriveStart, onLap, onViolation }: GameCa
     sceneRef.current = scene;
     scene.start();
 
+    // ウィンドウサイズ変更でcanvasの描画サイズとカメラ比率を合わせ直す。
     const resize = () => scene.resize();
     window.addEventListener("resize", resize);
 
     return () => {
+      // コンポーネント破棄時にアニメーションとWebGLリソースを片付けるため。
       window.removeEventListener("resize", resize);
       scene.dispose();
       sceneRef.current = null;
@@ -38,6 +41,7 @@ export function GameCanvas({ command, onDriveStart, onLap, onViolation }: GameCa
   }, [onDriveStart, onLap, onViolation]);
 
   useEffect(() => {
+    // React側で決まった操作を、次のThree.js更新で使う。
     sceneRef.current?.setCommand(command);
   }, [command]);
 

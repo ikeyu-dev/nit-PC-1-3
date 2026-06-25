@@ -52,9 +52,13 @@ const hedgeRects: Rect[] = [
 
 const startPosition = new THREE.Vector3(-24, 0, 14);
 const goalRect: Rect = { x: 32, z: -22, width: 6, depth: 6 };
+// signalZoneで信号の近くを検出し、赤信号中に進んだか判定する。
 const signalZone: Rect = { x: -4, z: 14, width: 5, depth: 7 };
+// stopApproachZoneで停止線の手前を検出し、止まれたか記録する。
 const stopApproachZone: Rect = { x: 6.4, z: 14, width: 4.8, depth: 7 };
+// stopPassZoneで停止線の通過を検出し、止まらなかった時に違反にする。
 const stopPassZone: Rect = { x: 9.8, z: 14, width: 1.1, depth: 7 };
+// nightZoneで夜道エリアを検出し、ライトONなしの走行を違反にする。
 const nightZone: Rect = { x: 23, z: -22, width: 9, depth: 7 };
 
 // 植え込みとの当たり判定に足す余白。車幅のおよそ半分。
@@ -122,10 +126,15 @@ export class DrivingScene {
     private goalCount = 0;
     private hasStartedRun = false;
     private reachedGoal = false;
+    // stopLineSatisfiedで停止線前に一度止まったことを記録し、一時不停止を判定する。
     private stopLineSatisfied = false;
+    // redSignalで現在の信号色を保持し、一定時間ごとに赤/青を切り替える。
     private redSignal = true;
+    // appliedViolationsで同じ違反を1周につき1回だけ減点する。
     private readonly appliedViolations = new Set<string>();
+    // trafficLightBulbsで信号の3色メッシュを保持し、点灯表示を更新する。
     private readonly trafficLightBulbs: THREE.Mesh[] = [];
+    // frontLightで自転車ライトを表現し、夜道エリアでライトON操作に反応させる。
     private readonly frontLight = new THREE.PointLight("#fff7bf", 0, 8, 1.6);
     private position = startPosition.clone();
     private command: DriveCommand = {
@@ -187,9 +196,11 @@ export class DrivingScene {
     }
 
     private buildLights() {
+        // 半球ライトで空と地面からの明るさを作り、全体を見やすくする。
         const hemisphere = new THREE.HemisphereLight("#f5fbff", "#83a56f", 2);
         this.scene.add(hemisphere);
 
+        // 太陽ライトで影を作り、道路や自転車の立体感を出す。
         const sun = new THREE.DirectionalLight("#fff2cf", 3.4);
         sun.position.set(-20, 28, 18);
         sun.castShadow = true;
@@ -277,6 +288,7 @@ export class DrivingScene {
     }
 
     private addRuleMarkers() {
+        // 白い停止線で止まる場所を見た目にも分かるようにする。
         const stopLine = new THREE.Mesh(
             new THREE.BoxGeometry(0.35, 0.06, 6.6),
             new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 0.42 }),
@@ -285,6 +297,7 @@ export class DrivingScene {
         stopLine.castShadow = false;
         this.scene.add(stopLine);
 
+        // 赤い三角標識で一時停止ポイントを示す。
         const stopSign = new THREE.Mesh(
             new THREE.ConeGeometry(0.9, 0.12, 3),
             new THREE.MeshStandardMaterial({ color: "#ff2d3f", roughness: 0.38 }),
@@ -294,6 +307,7 @@ export class DrivingScene {
         stopSign.castShadow = true;
         this.scene.add(stopSign);
 
+        // 信号機の柱と本体で赤信号・青信号の判定場所を示す。
         const pole = new THREE.Mesh(
             new THREE.CylinderGeometry(0.08, 0.08, 2.6, 12),
             new THREE.MeshStandardMaterial({ color: "#d8dee7", roughness: 0.46 }),
@@ -310,6 +324,7 @@ export class DrivingScene {
         signalBody.castShadow = true;
         this.scene.add(signalBody);
 
+        // 信号の3色を別々のメッシュにして、updateTrafficLightで光り方を変える。
         [0xff4d4d, 0xffd166, 0x4ccf64].forEach((color, index) => {
             const bulb = new THREE.Mesh(
                 new THREE.SphereGeometry(0.16, 20, 12),
@@ -325,6 +340,7 @@ export class DrivingScene {
             this.scene.add(bulb);
         });
 
+        // 夜道エリアを濃い色の道路で描き、ライトをつける練習場所にする。
         const nightPad = addBox(this.scene, nightZone, 0.1, 0.16, 0x283c5c, 0.72);
         nightPad.material = new THREE.MeshStandardMaterial({
             color: "#283c5c",
@@ -439,6 +455,7 @@ export class DrivingScene {
     }
 
     private addFallbackBicycle() {
+        // OBJ読み込み完了までの間に見える簡易自転車を作る。
         this.car.clear();
         const wheelMaterial = new THREE.MeshStandardMaterial({
             color: "#202938",
@@ -446,6 +463,7 @@ export class DrivingScene {
         });
 
         [-0.78, 0.78].forEach((z) => {
+            // TorusGeometryで前輪と後輪を作り、自転車らしいシルエットにする。
             const wheel = new THREE.Mesh(
                 new THREE.TorusGeometry(0.42, 0.045, 12, 32),
                 wheelMaterial,
@@ -477,6 +495,7 @@ export class DrivingScene {
 
     private async loadBicycleModel() {
         try {
+            // public配下のOBJ/MTL/テクスチャを読み込み、実際の自転車モデルへ差し替える。
             const modelPath = "/models/bicycle/";
             const materials = await new MTLLoader().setPath(modelPath).loadAsync("11717_bicycle_v2_L1.mtl");
             materials.preload();
@@ -488,33 +507,39 @@ export class DrivingScene {
 
             object.traverse((child) => {
                 if (child instanceof THREE.Mesh) {
+                    // 各メッシュで影を受ける/落とすようにして、道路上に自然に見せる。
                     child.castShadow = true;
                     child.receiveShadow = true;
                 }
             });
 
-            // このOBJはZ軸が高さ方向なので、Three.jsのY軸へ起こしてから地面に載せる。
+            // このOBJはZ軸が高さ方向なので、Three.jsのY軸へ起こしてから正規化する。
             object.rotation.x = -Math.PI / 2;
             object.rotation.z = -Math.PI / 2;
             object.updateMatrixWorld(true);
 
             const rotatedBox = new THREE.Box3().setFromObject(object);
             const rotatedSize = rotatedBox.getSize(new THREE.Vector3());
+            // 一番大きい辺を基準にスケールすることで、モデルサイズをゲーム内の自転車幅へ合わせる。
             const largestSide = Math.max(rotatedSize.x, rotatedSize.y, rotatedSize.z);
             object.scale.setScalar(2.15 / largestSide);
             object.updateMatrixWorld(true);
 
+            // スケール後の中心をcarグループ原点へ戻し、カメラ追従で見失わないようにする。
             const scaledBox = new THREE.Box3().setFromObject(object);
             const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
             object.position.sub(scaledCenter);
             object.updateMatrixWorld(true);
 
+            // 地面より下に出た分を持ち上げ、道路の上に自転車を置く。
             const groundedBox = new THREE.Box3().setFromObject(object);
             object.position.y -= groundedBox.min.y;
 
+            // 簡易自転車を消して、読み込んだOBJモデルへ差し替える。
             this.car.clear();
             this.car.add(object);
 
+            // 自転車ライトはモデル差し替え後も同じcarグループへ付け直す。
             this.frontLight.position.set(0, 0.75, 1.15);
             this.car.add(this.frontLight);
         } catch (error) {
@@ -523,6 +548,7 @@ export class DrivingScene {
     }
 
     private updateTrafficLight() {
+        // 経過時間で赤/青を切り替え、信号無視の練習に使う。
         this.redSignal = Math.floor(this.clock.elapsedTime / 4) % 2 === 0;
         this.trafficLightBulbs.forEach((bulb, index) => {
             const material = bulb.material;
@@ -530,15 +556,18 @@ export class DrivingScene {
                 return;
             }
             const isActive = this.redSignal ? index === 0 : index === 2;
+            // 点灯中の色だけemissiveを強くして、見た目で信号状態を伝える。
             material.emissiveIntensity = isActive ? 1.45 : 0.08;
         });
     }
 
     private reportViolation(type: ViolationType) {
+        // 同じ違反で何度も所持金が減らないよう、発生済みなら何もしない。
         if (this.appliedViolations.has(type)) {
             return;
         }
 
+        // 違反データにIDを付けてReact側へ渡し、所持金と青切符カードを更新する。
         this.appliedViolations.add(type);
         this.onViolation({
             ...violationRules[type],
@@ -547,23 +576,29 @@ export class DrivingScene {
     }
 
     private updateRuleChecks() {
+        // 毎フレーム交通ルール用の判定を行い、必要なら違反イベントを発生させる。
         this.updateTrafficLight();
 
+        // 停止線手前で十分に減速したら、一時停止できた扱いにする。
         if (inRect(this.position, stopApproachZone) && Math.abs(this.speed) < 0.18) {
             this.stopLineSatisfied = true;
         }
 
+        // 停止できていない状態で停止線を通過したら、一時不停止として扱う。
         if (inRect(this.position, stopPassZone) && !this.stopLineSatisfied && Math.abs(this.speed) > 0.3) {
             this.reportViolation("stopSign");
         }
 
+        // 赤信号の範囲で進んでいたら、信号無視として扱う。
         if (inRect(this.position, signalZone) && this.redSignal && Math.abs(this.speed) > 0.3) {
             this.reportViolation("redLight");
         }
 
+        // 夜道エリアでは両手上げのlightOn操作でライトを点灯する。
         const inNight = inRect(this.position, nightZone, 0.2);
         const lightIsOn = inNight && this.command.action === "lightOn";
         this.frontLight.intensity = lightIsOn ? 2.6 : 0;
+        // ライトが消えたまま夜道を走ると、無点灯走行として扱う。
         if (inNight && !lightIsOn && Math.abs(this.speed) > 0.3) {
             this.reportViolation("noLight");
         }

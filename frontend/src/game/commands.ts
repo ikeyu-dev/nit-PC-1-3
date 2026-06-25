@@ -1,5 +1,6 @@
 import type { BodyAction, DriveCommand, HandShape } from "../types";
 
+// 旧手形入力との互換を残すため、手形を体アクション相当の操作へ変換する。
 export const commandByHandShape: Record<HandShape, DriveCommand> = {
     Paper: {
         action: "pedal",
@@ -33,6 +34,7 @@ export const commandByHandShape: Record<HandShape, DriveCommand> = {
     },
 };
 
+// commandByBodyActionで姿勢推定結果を速度・旋回量に変換し、3D自転車を動かす。
 export const commandByBodyAction: Record<BodyAction, DriveCommand> = {
     idle: {
         action: "idle",

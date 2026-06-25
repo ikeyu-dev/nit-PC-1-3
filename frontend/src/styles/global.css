@@ -24,6 +24,7 @@ button {
 }
 
 .app-shell {
+  /* 画面全体をゲーム領域にして、3D canvasとUIを重ねるため。 */
   position: relative;
   width: 100vw;
   height: 100vh;
@@ -38,6 +39,7 @@ button {
 }
 
 .ui-layer {
+  /* UIをcanvas上に重ね、HUDとカメラパネルを上下に配置する。 */
   position: absolute;
   inset: 0;
   display: flex;
@@ -99,6 +101,7 @@ button {
 }
 
 .status-strip {
+  /* 4つのステータスを横並びにして、操作・所持金・検出・タイムを見せる。 */
   display: grid;
   grid-template-columns: repeat(4, minmax(78px, 1fr));
   gap: 8px;
@@ -138,6 +141,7 @@ button {
 }
 
 .violation-card {
+  /* 違反発生時の青切符カードをcanvas上に重ねて表示する。 */
   pointer-events: auto;
   align-self: flex-end;
   width: min(360px, 100%);
@@ -199,6 +203,7 @@ button {
 }
 
 .camera-panel {
+  /* カメラ映像と認識メッセージをまとめ、体の動き入力を確認できるようにする。 */
   display: grid;
   grid-template-columns: 150px minmax(180px, 260px);
   align-items: center;
@@ -248,6 +253,7 @@ button {
 }
 
 .goal-overlay {
+  /* ゴール後に操作を止め、結果パネルだけに注目させるため。 */
   position: absolute;
   inset: 0;
   display: grid;

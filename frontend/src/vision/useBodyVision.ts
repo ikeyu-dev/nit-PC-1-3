@@ -17,6 +17,7 @@ const defaultVisionState: BodyVisionState = {
 };
 
 function waitForVideoSize(video: HTMLVideoElement) {
+    // videoWidth/videoHeightが取れるまで待ち、姿勢推定へ空の映像を渡さないようにする。
     if (video.videoWidth > 0 && video.videoHeight > 0) {
         return Promise.resolve();
     }
@@ -48,14 +49,17 @@ function waitForVideoSize(video: HTMLVideoElement) {
 }
 
 function keypointMap(keypoints: PoseKeypoint[]) {
+    // keypoint名で検索しやすくするため、配列をMapへ変換する。
     return new Map(keypoints.filter((point) => point.name).map((point) => [point.name, point]));
 }
 
 function visible(point: PoseKeypoint | undefined, minScore = 0.28): point is PoseKeypoint {
+    // scoreで見えている体の点だけを採用し、誤検出を操作に使わないようにする。
     return !!point && (point.score ?? 0) >= minScore;
 }
 
 function classifyBodyAction(keypoints: PoseKeypoint[], previousAnkleY: number | null): BodyAction {
+    // MoveNetの骨格点から肩・手首・足首・鼻を取り出し、ゲーム操作へ変換する。
     const points = keypointMap(keypoints);
     const leftShoulder = points.get("left_shoulder");
     const rightShoulder = points.get("right_shoulder");
@@ -66,6 +70,7 @@ function classifyBodyAction(keypoints: PoseKeypoint[], previousAnkleY: number | 
     const nose = points.get("nose");
 
     if (!visible(leftShoulder) || !visible(rightShoulder)) {
+        // 肩が見えない時は全身姿勢が安定しないため、安全側の停止にする。
         return "idle";
     }
 
@@ -79,6 +84,7 @@ function classifyBodyAction(keypoints: PoseKeypoint[], previousAnkleY: number | 
         leftWrist.y < shoulderY - shoulderWidth * 0.18 &&
         rightWrist.y < shoulderY - shoulderWidth * 0.18
     ) {
+        // 両手を上げた姿勢でライトONにし、夜道の無点灯走行を避ける操作にする。
         return "lightOn";
     }
 
@@ -87,6 +93,7 @@ function classifyBodyAction(keypoints: PoseKeypoint[], previousAnkleY: number | 
         leftWrist.x < leftShoulder.x - shoulderWidth * 0.36 &&
         Math.abs(leftWrist.y - shoulderY) < shoulderWidth * 0.55
     ) {
+        // 左手首が左肩より外側に出たら、左に曲がる合図として扱う。
         return "signalLeft";
     }
 
@@ -95,25 +102,31 @@ function classifyBodyAction(keypoints: PoseKeypoint[], previousAnkleY: number | 
         rightWrist.x > rightShoulder.x + shoulderWidth * 0.36 &&
         Math.abs(rightWrist.y - shoulderY) < shoulderWidth * 0.55
     ) {
+        // 右手首が右肩より外側に出たら、右に曲がる合図として扱う。
         return "signalRight";
     }
 
     if (visible(nose) && Math.abs(nose.x - shoulderCenterX) > shoulderWidth * 0.2) {
+        // 顔が肩の中心から左右へずれたら、左右確認として扱う。
         return nose.x < shoulderCenterX ? "lookLeft" : "lookRight";
     }
 
     if (visible(leftAnkle) && visible(rightAnkle)) {
         const ankleY = (leftAnkle.y + rightAnkle.y) / 2;
         if (previousAnkleY !== null && Math.abs(ankleY - previousAnkleY) > shoulderWidth * 0.05) {
+            // 足首の上下変化で足踏みを検出し、前へ進む操作にする。
             return "pedal";
         }
     }
 
+    // どの動きにも当てはまらない時は止まる操作にする。
     return "idle";
 }
 
 export function useBodyVision() {
+    // videoRefでカメラ映像を画面表示と姿勢推定の入力に使う。
     const videoRef = useRef<HTMLVideoElement | null>(null);
+    // detectorRefでMoveNetの検出器を保持し、毎フレーム再生成しないようにする。
     const detectorRef = useRef<PoseDetector | null>(null);
     const timerRef = useRef<number | null>(null);
     const videoFrameCallbackRef = useRef<number | null>(null);
@@ -123,6 +136,7 @@ export function useBodyVision() {
     const [vision, setVision] = useState<BodyVisionState>(defaultVisionState);
 
     const stop = useCallback(() => {
+        // stopでタイマー・カメラ・検出器をまとめて止め、再起動できる状態に戻す。
         isRunningRef.current = false;
 
         if (timerRef.current) {
@@ -152,6 +166,7 @@ export function useBodyVision() {
 
     const start = useCallback(async () => {
         try {
+            // startでモデル読み込み、カメラ起動、フレームごとの姿勢推定を開始する。
             setVision((current) => ({
                 ...current,
                 status: "loading",
@@ -174,6 +189,7 @@ export function useBodyVision() {
             await import("@tensorflow/tfjs-backend-webgl");
             const tf = await import("@tensorflow/tfjs-core");
             try {
+                // WebGLで高速に推定し、使えない環境ではCPUへ切り替える。
                 await tf.setBackend("webgl");
             } catch {
                 await tf.setBackend("cpu");
@@ -181,6 +197,7 @@ export function useBodyVision() {
             await tf.ready();
 
             const poseDetection = await import("@tensorflow-models/pose-detection");
+            // MoveNet Lightningで軽量な単人姿勢推定を行い、ブラウザ上で動かしやすくする。
             const detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
                 modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
             });
@@ -192,6 +209,7 @@ export function useBodyVision() {
             }));
 
             const stream = await navigator.mediaDevices.getUserMedia({
+                // user-facingカメラでプレイヤーの体を映し、音声は使わない。
                 video: {
                     facingMode: "user",
                     width: { ideal: 640 },
@@ -210,6 +228,7 @@ export function useBodyVision() {
             isRunningRef.current = true;
 
             const scheduleNext = (detect: () => void) => {
+                // requestVideoFrameCallbackで映像更新に合わせて推定し、未対応ならsetTimeoutで代用する。
                 const video = videoRef.current;
                 if (!video) {
                     return;
@@ -223,6 +242,7 @@ export function useBodyVision() {
             };
 
             const detect = async () => {
+                // detectで1フレーム分の姿勢を推定し、BodyVisionStateへ反映する。
                 if (!isRunningRef.current || !videoRef.current || !detectorRef.current) {
                     return;
                 }
@@ -239,6 +259,7 @@ export function useBodyVision() {
                     }
 
                     const poses = await detectorRef.current.estimatePoses(video, {
+                        // 画面表示と同じ左右反転で、プレイヤーから見た左右を一致させる。
                         flipHorizontal: true,
                     });
 
@@ -246,11 +267,13 @@ export function useBodyVision() {
                     const pose = poses[0];
                     if (pose?.keypoints?.length) {
                         const keypoints = pose.keypoints as PoseKeypoint[];
+                        // 骨格点をゲーム操作へ変換し、React側へ渡す。
                         const action = classifyBodyAction(keypoints, previousAnkleYRef.current);
                         const points = keypointMap(keypoints);
                         const leftAnkle = points.get("left_ankle");
                         const rightAnkle = points.get("right_ankle");
                         if (visible(leftAnkle) && visible(rightAnkle)) {
+                            // 次フレームで足踏みを判定するため、現在の足首位置を保存する。
                             previousAnkleYRef.current = (leftAnkle.y + rightAnkle.y) / 2;
                         }
 

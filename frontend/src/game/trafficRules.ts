@@ -1,7 +1,9 @@
 import type { ViolationRule, ViolationType } from "../types";
 
+// INITIAL_MONEYでゲーム開始時の所持金を決め、反則金による減点スコアに使う。
 export const INITIAL_MONEY = 30000;
 
+// violationRulesで画像にある主な違反と反則金をまとめ、判定とUI表示の両方で使う。
 export const violationRules: Record<ViolationType, ViolationRule> = {
     distractedRiding: {
         type: "distractedRiding",
@@ -66,5 +68,6 @@ export const violationRules: Record<ViolationType, ViolationRule> = {
 };
 
 export function formatYen(value: number) {
+    // toLocaleStringで3桁区切りにして、子供にも金額を読みやすくする。
     return `${value.toLocaleString("ja-JP")}円`;
 }
